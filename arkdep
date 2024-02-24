@@ -7,6 +7,46 @@
 
 set -o pipefail
 
+# Print manual if no parameters provided or invalid amount of parameters is provided
+if [[ ! -n $1 ]]; then
+	cat <<- END
+	Usage: arkdep <action> [variant] [version]
+	Actions:
+	  deploy		Deploy a new or update an existing deployment
+	  init			Initialize arkdep on a new system
+	  teardown		Remove all arkdep-deploy related files and folders
+	  cleanup		Remove any hanging images and unfinished downloads
+	  healthcheck		Check for and report any config issues or untracked deployments
+	  get-available         List available packages in repo
+	  remove		Remove a specified deployment
+
+	Examples:
+	  arkdep deploy
+	      Check for updates, if available download and deploy
+
+	  arkdep deploy manjaro
+	      Download and deploy the latest release of the defined image variant
+
+	  arkdep deploy - stable_v1
+	      Download the defined image release from the default variant
+
+	  arkdep deploy manjaro stable_v1
+	      Download the defined image release from the specified variant
+
+	  arkdep deploy cache stable_v1
+	      Deploy an image from the cache directly skipping database download and checksum check
+
+	  arkdep remove stable_v1
+	      Remove the defined deployment
+
+	Variables:
+	  ARKDEP_ROOT		Prepend path to arkdep target directory
+	  ARKDEP_BOOT		Set custom /boot location, overwrites ARKDEP_ROOT on relevant tasks if set, implies ARKDEP_NO_BOOTCTL
+	  ARKDEP_NO_BOOTCTL	Do not run bootctl commands
+	END
+	exit 0
+fi
+
 ## Set common variables
 #
 declare -r arkdep_dir="$(readlink -m $ARKDEP_ROOT/arkdep)"
@@ -33,8 +73,8 @@ if [[ ! $1 == 'init' ]]; then
 
 	# Set default variables if config variables are undefined
 	[[ -z ${enable_overlay+x} ]] && enable_overlay=1 && printf '\e[1;33m<!>\e[0m\e[1m enable_overlay not defined in config, using default\e[0m\n'
-	[[ -z ${repo_url+x} ]] && repo_url='https://arkanelinux.org/arkdep' && printf '\e[1;33m<!>\e[0m\e[1m repo_url not defined in config, using default\e[0m\n'
-	[[ -z ${repo_default_image+x} ]] && repo_default_image='arkanelinux' && printf '\e[1;33m<!>\e[0m\e[1m repo_default_image not defined in config, using default\e[0m\n'
+	[[ -z ${repo_url+x} ]] && repo_url='https://download.manjaro.org/arkdep' && printf '\e[1;33m<!>\e[0m\e[1m repo_url not defined in config, using default\e[0m\n'
+	[[ -z ${repo_default_image+x} ]] && repo_default_image='manjaro' && printf '\e[1;33m<!>\e[0m\e[1m repo_default_image not defined in config, using default\e[0m\n'
 	[[ -z ${deploy_keep+x} ]] && deploy_keep=3 && printf '\e[1;33m<!>\e[0m\e[1m deploy_keep not defined in config, using default\e[0m\n'
 	[[ -z ${clean_cache_on_remove+x} ]] && clean_cache_on_remove=1 && printf '\e[1;33m<!>\e[0m\e[1m clean_cache_on_remove not defined in config, using default\e[0m\n'
 	[[ -z ${always_healthcheck+x} ]] && always_healthcheck=1 && printf '\e[1;33m<!>\e[0m\e[1m always_healthcheck not defined in config, using default\e[0m\n'
@@ -287,10 +327,10 @@ init () {
 	enable_overlay=1
 
 	# URL to image repository, do not add trailing slash
-	repo_url='https://repo.arkanelinux.org/arkdep'
+	repo_url='https://download.manjaro.org/arkdep'
 
 	# Default image pulled from repo if nothing defined
-	repo_default_image='arkanelinux'
+	repo_default_image='manjaro'
 
 	# Keep the latest n-1 deployments, remove anything older
 	deploy_keep=4
@@ -332,11 +372,11 @@ init () {
 
 	# Add default bootloader config file
 	cat <<- END > $arkdep_dir/templates/systemd-boot
-	title Arkane GNU/Linux - Arkdep
-	linux /arkdep/%target%/vmlinuz
+	title Manjaro Linux - Arkdep
+	linux /arkdep/%target%/vmlinuz-6.6-x86_64
 	initrd /amd-ucode.img
 	initrd /intel-ucode.img
-	initrd /arkdep/%target%/initramfs-linux.img
+	initrd /arkdep/%target%/initramfs-6.6-x86_64.img
 	options root="LABEL=arkane_root" rootflags=subvol=/arkdep/deployments/%target%/rootfs rw
 	END
 
@@ -801,7 +841,7 @@ deploy () {
 	mkdir -p $arkdep_boot/arkdep/${data[0]}
 	# Deploy kernel to /boot, deploy first hit of kernels_installed
 	printf "Copying ${kernels_installed[0]}/vmlinuz\n"
-	cp $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]}/vmlinuz $arkdep_boot/arkdep/${data[0]}/ ||
+	cp -v $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]}/vmlinuz-6.6-x86_64 $arkdep_boot/arkdep/${data[0]}/ ||
 		cleanup_and_quit 'Failed to copy kernel image'
 
 	# Deploy CPU firmware to boot
@@ -824,7 +864,7 @@ deploy () {
 	dracut -q -k $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]} \
 		-c $arkdep_dir/deployments/${data[0]}/rootfs/etc/dracut.conf \
 		--confdir $arkdep_dir/deployments/${data[0]}/rootfs/etc/dracut.conf.d \
-		--kernel-image $arkdep_boot/arkdep/${data[0]}/vmlinuz \
+		--kernel-image $arkdep_boot/arkdep/${data[0]}/vmlinuz-6.6-x86_64 \
 		--kver ${kernels_installed[0]} \
 		--force \
 		$arkdep_boot/arkdep/${data[0]}/initramfs-linux.img || cleanup_and_quit 'Failed to generate initramfs'
