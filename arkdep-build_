@@ -6,14 +6,19 @@
 #    (at your option) any later version.
 
 # Print manual if no parameters provided or invalid amount of parameters is provided
-if [[ ! -n $1 || -n $2 ]]; then
+if [[ ! -n $1 || -n $3 ]]; then
 	cat <<- END
-	Usage: arkdep-build [variant]
+	Usage: arkdep-build [variant] [type]
 	Variants:
 	  manjaro		Plain Manjaro TTY image
 
 	Variants are loaded based on their directory names, the ones listed here
 	 are included by default.
+
+	Types:
+	  btrfs	[default]	use tmp btrfs subvolumes to create the images
+	  img			images will be deployed to an image
+
 
 	Variables:
 	  ARKDEP_NO_TAR			Do not create a compressed tarball, only create the images
@@ -28,9 +33,23 @@ fi
 
 ## Common functions
 #
-# Cleanup and quit if error
-cleanup_and_quit () {
+## Umount image
+_umount_img() {
+    local _loopdevice
+    _loopdevice="$(losetup -ln -O name -j "${output_target}/${image_name}.img")"
+    if mountpoint -q -- "${worktmp}/imgp1"; then
+        umount "${worktmp}/imgp1"
+    fi
+    if mountpoint -q -- "${worktmp}/imgp2"; then
+        umount "${worktmp}/imgp2"
+    fi
+    if [[ -n "${_loopdevice}" ]]; then
+        losetup -d "${_loopdevice}"
+    fi
+}
 
+# Cleanup and quit if error
+cleanup () {
 	# If any paramters are passed we will assume it to be an error
 	[[ -n $1 ]] && printf "\e[1;31m<#>\e[0m $*\e[0m\n" >&2
 
@@ -49,21 +68,79 @@ cleanup_and_quit () {
 	rm -rf $workdir/etc \
 		$workdir/var \
 		$workdir
-
+        
 	# Quit program if argument provided to function
 	if [[ -n $1 ]]; then
 		exit 1
 	fi
+}
 
-	# Otherwise just quit, there is no error
-	exit 0
+# Create Image
+_create_img() {
+    trap _umount_img EXIT
+    local _espsize _loopdevice
 
+    rm -f -- "${output_target}/${image_name}.img"
+    printf '\e[1;34m-->\e[0m\e[1m Creating GPT disk image\e[0m\n'
+    
+    _espsize=600
+    [[ -z ${_rootlabel} ]] && _rootlabel=manjaro_root
+    [[ -z ${_esplabel} ]] && _esplabel=manjaro_esp
+
+    # IMG size = 10 GiB
+    # Create IMG file
+    truncate -s 10G "${output_target}/${image_name}.img"
+
+    # GPT partitions
+    _loopdevice=$(losetup -f --show "${output_target}/${image_name}.img" 2> /dev/null || \
+                  { echo 'Failed to create loop device'; exit 1; } )
+    if ! echo 'label: gpt' | udevadm lock --device="${_loopdevice}" -- \
+            sfdisk -W always -- "${_loopdevice}" &> /dev/null; then
+        echo 'Failed to create new gpt partition table!'
+        exit 1
+    fi
+    sleep 3
+    partprobe -- "${_loopdevice}"
+
+    if ! echo -e ",${_espsize}MiB,EBD0A0A2-B9E5-4433-87C0-68B6B72699C7,\n,+,L,\n" | \
+            udevadm lock --device="${_loopdevice}" -- sfdisk --append  -W always -- "${_loopdevice}" &> /dev/null; then
+        echo 'Failed to create partitions!'
+        exit 1
+    fi
+    sleep 3
+    partprobe -- "${_loopdevice}"
+
+    if ! udevadm lock --device="${_loopdevice}p1" -- \
+            mkfs.fat -F32 -n "${esplabel}" -- "${_loopdevice}p1" &> /dev/null; then
+        echo 'Formating partition #1 failed!'
+        exit 1
+    fi
+    if ! udevadm lock --device="${_loopdevice}p2" -- \
+            mkfs.btrfs -L "${rootlabel}" -q -- "${_loopdevice}p2" &> /dev/null; then
+        echo 'Formating partition #2 failed!'
+        exit 1
+    fi
+
+    printf '\e[1;34m-->\e[0m\e[1m Mounting partitions\e[0m\n'
+    # Mount partitions
+    install -d -m 0755 -- "${worktmp}/imgp1"
+    install -d -m 0755 --  "${worktmp}/imgp2"
+    mount -- "${_loopdevice}p1" "${worktmp}/imgp1"
+    mount -- "${_loopdevice}p2" "${worktmp}/imgp2"
 }
 
 ## Set common variables
 #
-declare -r workdir='/var/tmp/rootfs'
 declare -r variant="$1"
+declare -r imgtype="$2"
+declare -r worktmp='/var/tmp'
+
+if [[ "$imgtype" == 'img' ]]; then
+	# Change workdir to BTRS partition
+	declare -r workdir="${worktmp}/imgp2/rootfs"
+else
+	declare -r workdir="${worktmp}/rootfs"
+fi
 
 if [[ -v ARKDEP_CONFIGS ]]; then
 	declare -r configsdir="$ARKDEP_CONFIGS"
@@ -103,8 +180,6 @@ gen_random_string () {
 
 }
 
-declare -r image_name=$(gen_random_string)
-
 ## Error checking
 #
 # Quit if not root
@@ -129,31 +204,6 @@ fi
 
 ## Variants
 #
-# Build migration type image
-if [[ $type == 'migration' ]]; then
-
-	printf '\e[1;34m-->\e[0m\e[1m Started migration image build\e[0m\n'
-
-	# Create output directory structure
-	mkdir -p $output_target/$image_name
-
-	# Copy migration contents to compression target dir
-	cp -v $variantdir/migration.sh $output_target/$image_name/$image_name-migration.sh ||
-		cleanup_and_quit 'No primary migration script found'
-
-	# Copy migration related files if they are provided
-	if [[ -d $variantdir/migration ]]; then
-		cp -rv $variantdir/migration $output_target/$image_name/$image_name-migration
-	fi
-
-	# Compress migration files
-	tar -cv -I 'zstd -12 -T0 ' -f $output_target/$image_name.tar.zst -C $output_target/$image_name .
-
-	# We can just exit, no need to do a cleanup
-	exit 0
-
-fi
-
 # Build manjaro type image
 if [[ $type == 'manjaro' ]]; then
 
@@ -163,10 +213,15 @@ if [[ $type == 'manjaro' ]]; then
 		exit 1
 	fi
 
-	printf '\e[1;34m-->\e[0m\e[1m Started Manjaro Linux image build\e[0m\n'
+	declare -r image_name=$(gen_random_string)
+	printf "\e[1;34m-->\e[0m\e[1m Started Manjaro Linux ($image_name) image build\e[0m\n"
+
+	# Create dir for storing the images
+	mkdir -vp $(readlink -m $output_target/$image_name)
 
 	# Allow user to reuse subvolumes for testing
 	if [[ ! $ARKDEP_STATIC_WORKDIR -eq 1 ]] && [[ ! -d $workdir ]]; then
+		[[ "$imgtype" == 'img' ]] && _create_img
 		# Create temporary Btrfs subvolume
 		printf "\e[1;34m-->\e[0m\e[1m Creating temporary Btrfs subvolumes at $(readlink -m $workdir)\e[0m\n"
 		btrfs subvolume create $workdir || cleanup_and_quit "Failed to create btrfs subvolume $(readlink -m $workdir)"
@@ -285,7 +340,7 @@ if [[ $type == 'manjaro' ]]; then
 	ln -sv ../../../var/usrliblocale $workdir/usr/lib/locale || cleanup_and_quit 'Failed to create usrlocal symlink'
 
 	# Opt symlink
-	mv $workdir/opt $workdir/var/ || cleanup_and_quit 'Failed to move opt to var/opt'
+	mv $workdir/opt $workdir/var/opt || cleanup_and_quit 'Failed to move opt to var/opt'
 	ln -sv var/opt $workdir/opt || cleanup_and_quit 'Failed to create opt symlink'
 
 	# srv symlink
@@ -348,9 +403,6 @@ if [[ $type == 'manjaro' ]]; then
 	btrfs property set -ts $workdir/etc ro true || cleanup_and_quit 'Failed to set etc to read-only'
 	btrfs property set -ts $workdir/var ro true || cleanup_and_quit 'Failed to set var to read-only'
 
-	# Create dir for storing the images
-	mkdir -p $output_target/$image_name
-
 	# Write subvolume to image
 	printf '\e[1;34m-->\e[0m\e[1m Creating images\e[0m\n'
 	btrfs send -f $output_target/$image_name/$image_name-rootfs.img $workdir
@@ -362,6 +414,14 @@ if [[ $type == 'manjaro' ]]; then
 		tar -cv -I 'zstd -12 -T0 ' -f $output_target/$image_name.tar.zst -C $output_target/$image_name .
 	fi
 
-	cleanup_and_quit
+	cleanup
 
+	if [[ "$imgtype" == 'img' ]]; then
+		#TODO: deploy stuff to imgp1 and imgp2
+
+		_umount_img
+		rm -rf "${worktmp}/imgp1" \
+        		"${worktmp}/imgp2"
+        fi
+	exit 0
 fi
