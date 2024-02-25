@@ -3,3 +3,5 @@ linux66
 linux-firmware
 amd-ucode
 intel-ucode
+manjaro-keyring
+dracut

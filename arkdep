@@ -373,10 +373,10 @@ init () {
 	# Add default bootloader config file
 	cat <<- END > $arkdep_dir/templates/systemd-boot
 	title Manjaro Linux - Arkdep
-	linux /arkdep/%target%/vmlinuz-6.6-x86_64
+	linux /arkdep/%target%/vmlinuz
 	initrd /amd-ucode.img
 	initrd /intel-ucode.img
-	initrd /arkdep/%target%/initramfs-6.6-x86_64.img
+	initrd /arkdep/%target%/initramfs-linux.img
 	options root="LABEL=arkane_root" rootflags=subvol=/arkdep/deployments/%target%/rootfs rw
 	END
 
@@ -841,7 +841,7 @@ deploy () {
 	mkdir -p $arkdep_boot/arkdep/${data[0]}
 	# Deploy kernel to /boot, deploy first hit of kernels_installed
 	printf "Copying ${kernels_installed[0]}/vmlinuz\n"
-	cp -v $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]}/vmlinuz-6.6-x86_64 $arkdep_boot/arkdep/${data[0]}/ ||
+	cp -v $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]}/vmlinuz $arkdep_boot/arkdep/${data[0]}/ ||
 		cleanup_and_quit 'Failed to copy kernel image'
 
 	# Deploy CPU firmware to boot
@@ -864,7 +864,7 @@ deploy () {
 	dracut -q -k $arkdep_dir/deployments/${data[0]}/rootfs/usr/lib/modules/${kernels_installed[0]} \
 		-c $arkdep_dir/deployments/${data[0]}/rootfs/etc/dracut.conf \
 		--confdir $arkdep_dir/deployments/${data[0]}/rootfs/etc/dracut.conf.d \
-		--kernel-image $arkdep_boot/arkdep/${data[0]}/vmlinuz-6.6-x86_64 \
+		--kernel-image $arkdep_boot/arkdep/${data[0]}/vmlinuz \
 		--kver ${kernels_installed[0]} \
 		--force \
 		$arkdep_boot/arkdep/${data[0]}/initramfs-linux.img || cleanup_and_quit 'Failed to generate initramfs'
