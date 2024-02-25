@@ -1,5 +1,4 @@
 arkdep
-dbus-daemon-units 
 dosfstools
 efibootmgr
 f2fs-tools

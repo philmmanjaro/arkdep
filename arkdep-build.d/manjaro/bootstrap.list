@@ -1,4 +1,5 @@
 base
+dbus-daemon-units
 linux66
 linux-firmware
 amd-ucode
