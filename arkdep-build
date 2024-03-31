@@ -465,7 +465,7 @@ if [[ $type == 'manjaro' ]]; then
 		arkdep deploy cache $image_name
 		# rm -v ${worktmp}/imgp2/arkdep/cache/$image_name.tar.zst
 
-		btrfs filesystem mkswapfile --size 6G ${worktmp}/imgp2/arkdep/shared/var/swapfile
+		btrfs filesystem mkswapfile --size 6G ${worktmp}/imgp2/arkdep/shared/swapfile
 
 		cp ${worktmp}/imgp2/arkdep/deployments/$image_name/rootfs/usr/lib/systemd/boot/efi/systemd-bootx64.efi \
 		${worktmp}/imgp1/EFI/systemd
