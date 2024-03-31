@@ -456,9 +456,9 @@ if [[ $type == 'manjaro' ]]; then
 		mkdir -p ${worktmp}/imgp1/EFI/{BOOT,systemd}
 
 		# Run post-init script if exists
-		if [[ -f $variantdir/extensions/post-init.sh ]]; then
+		if [[ -f $variantdir/extensions/post_init.sh ]]; then
 			printf '\e[1;34m-->\e[0m\e[1m Running post-init extension\e[0m\n'
-			(source $variantdir/extensions/post-init.sh)
+			(source $variantdir/extensions/post_init.sh)
 		fi
 
 		arkdep deploy cache $image_name
