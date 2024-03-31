@@ -57,13 +57,10 @@ libva-mesa-driver
 libva-vdpau-driver
 libva-vdpau-driver
 manjaro-alsa
-manjaro-application-utility
 manjaro-gstreamer
-manjaro-hello
 manjaro-kde-settings
 manjaro-pipewire
-manjaro-settings-manager-kcm
-manjaro-settings-manager-knotifier
+manjaro-zsh-config 
 mesa-utils
 milou
 mtpfs

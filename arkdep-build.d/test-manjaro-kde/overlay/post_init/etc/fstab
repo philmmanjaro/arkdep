@@ -1,0 +1,5 @@
+LABEL=manjaro_root		/home		btrfs		rw,relatime,discard=async,space_cache=v2,subvol=arkdep/shared/home,compress=zstd	0 0
+LABEL=manjaro_root		/var		btrfs		rw,relatime,discard=async,space_cache=v2,subvol=arkdep/shared/var,compress=zstd	0 0
+LABEL=manjaro_root		/arkdep		btrfs		rw,relatime,discard=async,space_cache=v2,subvol=arkdep,compress=zstd	0 0
+LABEL=manjaro_esp		/boot		vfat		rw,umask=0077	0 2
+/var/swapfile			none      	swap      	defaults  	0 0
