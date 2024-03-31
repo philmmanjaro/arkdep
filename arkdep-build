@@ -38,10 +38,10 @@ _umount_img() {
     local _loopdevice
     _loopdevice="$(losetup -ln -O name -j "${output_target}/${image_name}.img")"
     if mountpoint -q -- "${worktmp}/imgp1"; then
-        umount "${worktmp}/imgp1"
+        umount -l "${worktmp}/imgp1"
     fi
     if mountpoint -q -- "${worktmp}/imgp2"; then
-        umount "${worktmp}/imgp2"
+        umount -l "${worktmp}/imgp2"
     fi
     if [[ -n "${_loopdevice}" ]]; then
         losetup -d "${_loopdevice}"
@@ -49,7 +49,7 @@ _umount_img() {
 }
 
 # Cleanup and quit if error
-cleanup () {
+cleanup_and_quit () {
 	# If any paramters are passed we will assume it to be an error
 	[[ -n $1 ]] && printf "\e[1;31m<#>\e[0m $*\e[0m\n" >&2
 
@@ -87,9 +87,9 @@ _create_img() {
     [[ -z ${_rootlabel} ]] && _rootlabel=manjaro_root
     [[ -z ${_esplabel} ]] && _esplabel=manjaro_esp
 
-    # IMG size = 10 GiB
+    # IMG size = 20 GiB
     # Create IMG file
-    truncate -s 10G "${output_target}/${image_name}.img"
+    truncate -s 20G "${output_target}/${image_name}.img"
 
     # GPT partitions
     _loopdevice=$(losetup -f --show "${output_target}/${image_name}.img" 2> /dev/null || \
@@ -111,12 +111,12 @@ _create_img() {
     partprobe -- "${_loopdevice}"
 
     if ! udevadm lock --device="${_loopdevice}p1" -- \
-            mkfs.fat -F32 -n "${esplabel}" -- "${_loopdevice}p1" &> /dev/null; then
+            mkfs.fat -F32 -n "${_esplabel}" -- "${_loopdevice}p1" &> /dev/null; then
         echo 'Formating partition #1 failed!'
         exit 1
     fi
     if ! udevadm lock --device="${_loopdevice}p2" -- \
-            mkfs.btrfs -L "${rootlabel}" -q -- "${_loopdevice}p2" &> /dev/null; then
+            mkfs.btrfs -L "${_rootlabel}" -q -- "${_loopdevice}p2" &> /dev/null; then
         echo 'Formating partition #2 failed!'
         exit 1
     fi
@@ -444,14 +444,42 @@ if [[ $type == 'manjaro' ]]; then
 		tar -cv -I 'zstd -12 -T0 ' -f $output_target/$image_name.tar.zst -C $output_target/$image_name .
 	fi
 
-	cleanup
+	cleanup_and_quit
 
 	if [[ "$imgtype" == 'img' ]]; then
-		#TODO: deploy stuff to imgp1 and imgp2
+		export ARKDEP_NO_BOOTCTL=1 ARKDEP_ROOT=${worktmp}/imgp2 ARKDEP_BOOT=${worktmp}/imgp1
+
+		arkdep init
+
+		cp -v $output_target/$image_name.tar.zst ${worktmp}/imgp2/arkdep/cache
+		mkdir -p ${worktmp}/imgp1/loader/entries
+		mkdir -p ${worktmp}/imgp1/EFI/{BOOT,systemd}
+
+		# Run post-init script if exists
+		if [[ -f $variantdir/extensions/post-init.sh ]]; then
+			printf '\e[1;34m-->\e[0m\e[1m Running post-init extension\e[0m\n'
+			(source $variantdir/extensions/post-init.sh)
+		fi
+
+		arkdep deploy cache $image_name
+		# rm -v ${worktmp}/imgp2/arkdep/cache/$image_name.tar.zst
+
+		btrfs filesystem mkswapfile --size 6G ${worktmp}/imgp2/arkdep/shared/var/swapfile
+
+		cp ${worktmp}/imgp2/arkdep/deployments/$image_name/rootfs/usr/lib/systemd/boot/efi/systemd-bootx64.efi \
+		${worktmp}/imgp1/EFI/systemd
+		cp ${worktmp}/imgp2/arkdep/deployments/$image_name/rootfs/usr/lib/systemd/boot/efi/systemd-bootx64.efi \
+		${worktmp}/imgp1/EFI/BOOT/BOOTx64.EFI
+		echo 'timeout 0' > ${worktmp}/imgp1/loader/loader.conf
+		echo "default $image_name.conf" >> ${worktmp}/imgp1/loader/loader.conf
 
 		_umount_img
 		rm -rf "${worktmp}/imgp1" \
         		"${worktmp}/imgp2"
+		sleep 2
+		tar --transform 's/.*\///g' -cv -I 'zstd -12 -T0 ' -f "${output_target}/${image_name}.img.tar.zst" "${output_target}/${image_name}.img"
+		sha256sum "${output_target}/${image_name}.img.tar.zst" > "${output_target}/${image_name}.img.tar.zst.sha256"
+		sha256sum "${output_target}/${image_name}.img" > "${output_target}/${image_name}.img.sha256"
         fi
 	exit 0
 fi
