@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Keep user changes
+sed -i -e 's/backup_user_accounts=0/backup_user_accounts=1/g' ${worktmp}/imgp2/arkdep/config
+
+# Set deploy_keep to 2
+sed -i -e 's/deploy_keep=4/deploy_keep=2/g' ${worktmp}/imgp2/arkdep/config
+
 # Add user
 mkdir -p ${worktmp}/imgp2/arkdep/shared/home/user
 cat <<-EOF > ${worktmp}/imgp2/arkdep/shared/home/user/.zshrc

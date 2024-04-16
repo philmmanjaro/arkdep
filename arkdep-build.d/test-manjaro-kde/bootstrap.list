@@ -1,10 +1,7 @@
 amd-ucode
 base
-dbus-daemon-units
 dracut
 intel-ucode
 linux-firmware
-linux67
-linux67-headers
-linux67-acpi_call 
+linux66
 manjaro-keyring
