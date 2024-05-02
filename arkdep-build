@@ -213,7 +213,6 @@ if [[ $type == 'manjaro' ]]; then
 		# Read package list and install
 		readarray packages < $variantdir/package.list
 		arch-chroot $workdir pacman -S --noconfirm ${packages[*]} || cleanup_and_quit 'Failed to install packages'
-		pacman -Q --root=$workdir > $output_target/$image_name.pkgs
 
 		# Unmount pacman cache
 		umount -l $workdir/var/cache/pacman/pkg
