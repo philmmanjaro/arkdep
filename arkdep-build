@@ -153,8 +153,8 @@ if [[ $type == 'migration' ]]; then
 
 fi
 
-# Build archlinux type image
-if [[ $type == 'archlinux' ]]; then
+# Build manjaro type image
+if [[ $type == 'manjaro' ]]; then
 
 	# Ensure bootstrap.list exists, if not error and quit
 	# This is the mimimum requirement to perform a build and this checked first
@@ -163,7 +163,7 @@ if [[ $type == 'archlinux' ]]; then
 		exit 1
 	fi
 
-	printf '\e[1;34m-->\e[0m\e[1m Started Arch linux image build\e[0m\n'
+	printf "\e[1;34m-->\e[0m\e[1m Started Manjaro Linux ($image_name) image build\e[0m\n"
 
 	printf '\e[1;34m-->\e[0m\e[1m Creating disk image\e[0m\n'
 	fallocate -l $build_image_size $build_image || cleanup_and_quit "Failed to create disk image at $build_image"
