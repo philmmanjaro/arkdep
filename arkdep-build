@@ -153,8 +153,8 @@ if [[ $type == 'migration' ]]; then
 
 fi
 
-# Build manjaro type image
-if [[ $type == 'manjaro' ]]; then
+# Build archlinux type image
+if [[ $type == 'archlinux' ]]; then
 
 	# Ensure bootstrap.list exists, if not error and quit
 	# This is the mimimum requirement to perform a build and this checked first
